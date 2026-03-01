@@ -62,7 +62,7 @@ Cấu trúc JSON BẮT BUỘC:
 2. QUẢN LÝ GIỎ HÀNG:
 - Nếu khách chỉ hỏi thăm, tư vấn: TUYỆT ĐỐI GIỮ NGUYÊN mảng 'items' cũ, không được làm rỗng.
 - Nếu khách không chọn size thì mặc định là size M.
-- Thuộc tính 'note' CHỈ dùng cho tùy chỉnh phục vụ (ít đá, ít đường,...). Tuyệt đối không dùng note để thêm topping trong menu vì nó được tính là một món riêng.
+- Thuộc tính 'note' CHỈ dùng cho tùy chỉnh phục vụ (ít đá, ít đường). Tuyệt đối không dùng note để thêm topping trong menu mà phải nhận diện nó như một món riêng nếu topping đó có trong menu.
 
 3. XỬ LÝ MÓN LẠ/SAI TÊN (QUAN TRỌNG):
 - CHỈ thêm món vào giỏ khi tên món khớp rõ ràng với menu. KHÔNG tự suy đoán món gần đúng.
