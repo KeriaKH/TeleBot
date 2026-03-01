@@ -1,6 +1,5 @@
 const { normalizeTextKey } = require('../utils/text');
-
-const MAX_HISTORY_MESSAGES = 14;
+const { MAX_HISTORY_MESSAGES } = require('../config');
 
 function sanitizeAndRecalculateItems(rawItems = [], menuPriceMap) {
     const safeItems = [];
@@ -31,6 +30,7 @@ function sanitizeAndRecalculateItems(rawItems = [], menuPriceMap) {
 
         safeItems.push({
             name,
+            category: menuEntry?.category || '',
             size,
             quantity,
             note: typeof rawItem?.note === 'string' ? rawItem.note.trim() : '',

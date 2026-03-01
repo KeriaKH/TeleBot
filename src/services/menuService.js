@@ -14,6 +14,7 @@ function buildMenuPriceMap(menuData) {
         category.items.forEach(item => {
             menuPriceMap.set(normalizeTextKey(item.name), {
                 name: item.name,
+                category: category.category,
                 price_m: item.price_m,
                 price_l: item.price_l
             });

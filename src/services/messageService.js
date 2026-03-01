@@ -2,8 +2,10 @@ function buildSafeOrderReply(items, total) {
     let text = '🧾 Bạn đã đặt:\n';
 
     items.forEach((item, index) => {
+        const isTopping = String(item.category || '').toLowerCase() === 'topping';
         const unitPrice = item.quantity > 0 ? Math.floor(item.price / item.quantity) : item.price;
-        text += `${index + 1}. ${item.name} size ${item.size} x${item.quantity} - ${unitPrice.toLocaleString('vi-VN')}đ/món\n`;
+        const sizeText = isTopping ? '' : ` size ${item.size}`;
+        text += `${index + 1}. ${item.name}${sizeText} x${item.quantity} - ${unitPrice.toLocaleString('vi-VN')}đ/món\n`;
         if (item.note) {
             text += `   👉 Ghi chú: ${item.note}\n`;
         }
@@ -19,7 +21,9 @@ function buildMotherOrderMessage(cart) {
     message += '📝 Chi tiết đơn:\n';
 
     cart.items.forEach((item, index) => {
-        message += `${index + 1}. ${item.name} (Size ${item.size}) x${item.quantity}\n`;
+        const isTopping = String(item.category || '').toLowerCase() === 'topping';
+        const sizeText = isTopping ? '' : ` (Size ${item.size})`;
+        message += `${index + 1}. ${item.name}${sizeText} x${item.quantity}\n`;
         if (item.note && item.note.trim() !== '') {
             message += `   👉 Ghi chú: ${item.note}\n`;
         }
