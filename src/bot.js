@@ -28,6 +28,7 @@ const menuPriceMap = buildMenuPriceMap(menuData);
 const userCarts = {};
 const chatSessions = {};
 const lastActiveButtons = {};
+const AI_TIMEOUT_MS = 15000;
 
 const ORDER_ACTIONS = Markup.inlineKeyboard([
     Markup.button.callback('✅ Xác Nhận Đặt Hàng', 'CONFIRM_ORDER'),
@@ -119,6 +120,75 @@ function extractJsonString(rawText) {
     return text;
 }
 
+function normalizeLikelyJson(jsonText) {
+    let normalized = String(jsonText || '').trim();
+    if (!normalized) return normalized;
+
+    normalized = normalized
+        .replace(/^\uFEFF/, '')
+        .replace(/[\u201C\u201D]/g, '"')
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/,\s*([}\]])/g, '$1')
+        .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
+
+    if (normalized.includes("'")) {
+        normalized = normalized.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, inner) => {
+            const escaped = inner.replace(/\"/g, '"').replace(/"/g, '\\"');
+            return `"${escaped}"`;
+        });
+    }
+
+    return normalized;
+}
+
+function parseOrderData(rawText) {
+    const extracted = extractJsonString(rawText);
+
+    try {
+        return JSON.parse(extracted);
+    } catch (firstError) {
+        const normalized = normalizeLikelyJson(extracted);
+        try {
+            return JSON.parse(normalized);
+        } catch (secondError) {
+            const parseError = new Error(`JSON_PARSE_ERROR: ${secondError.message}`);
+            parseError.name = 'JsonParseError';
+            throw parseError;
+        }
+    }
+}
+
+async function withTimeout(promise, timeoutMs, timeoutMessage = 'TIMEOUT') {
+    let timer;
+    try {
+        const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => {
+                const err = new Error(timeoutMessage);
+                err.name = 'TimeoutError';
+                reject(err);
+            }, timeoutMs);
+        });
+
+        return await Promise.race([promise, timeoutPromise]);
+    } finally {
+        clearTimeout(timer);
+    }
+}
+
+async function replyCurrentCartOrFallback(ctx, userId, fallbackMessage) {
+    const currentCart = userCarts[userId];
+    if (!currentCart || !Array.isArray(currentCart.items) || currentCart.items.length === 0) {
+        await ctx.reply(fallbackMessage);
+        return;
+    }
+
+    await ctx.reply('Mình đang gặp chút trục trặc khi xử lý câu vừa rồi, mình giữ nguyên đơn hiện tại của bạn nhé 👇');
+    await safeClearInlineKeyboard(ctx, lastActiveButtons[userId]);
+    const receipt = buildSafeOrderReply(currentCart.items, currentCart.total);
+    const sentMsg = await ctx.reply(receipt, ORDER_ACTIONS);
+    lastActiveButtons[userId] = sentMsg.message_id;
+}
+
 async function generateOrderWithGemini(history) {
     const contents = history
         .filter((msg) => msg.role !== 'system')
@@ -196,8 +266,12 @@ function createBot() {
             chatSessions[userId].push({ role: 'user', content: userMessage });
             trimChatHistory(chatSessions[userId]);
 
-            const responseText = await generateOrderWithGemini(chatSessions[userId]);
-            const orderData = JSON.parse(extractJsonString(responseText));
+            const responseText = await withTimeout(
+                generateOrderWithGemini(chatSessions[userId]),
+                AI_TIMEOUT_MS,
+                'AI request timeout'
+            );
+            const orderData = parseOrderData(responseText);
 
             await safeDeleteMessage(ctx, thinkingMsg.message_id);
 
@@ -244,6 +318,25 @@ function createBot() {
             console.error('Lỗi AI hoặc Logic:', error);
 
             await safeDeleteMessage(ctx, thinkingMsg.message_id);
+
+            if (error?.name === 'TimeoutError') {
+                await replyCurrentCartOrFallback(
+                    ctx,
+                    userId,
+                    'Quán đang hơi đông nên phản hồi chậm một chút 😥 Bạn nhắn lại giúp mình hoặc gõ “xem đơn hàng” để kiểm tra đơn hiện tại nhé.'
+                );
+                return;
+            }
+
+            if (error?.name === 'JsonParseError' || String(error?.message || '').includes('JSON_PARSE_ERROR')) {
+                await replyCurrentCartOrFallback(
+                    ctx,
+                    userId,
+                    'Mình chưa đọc kịp nội dung đơn vừa rồi. Bạn nhắn lại ngắn gọn hơn giúp mình hoặc gõ “xem đơn hàng” nhé.'
+                );
+                return;
+            }
+
             await ctx.reply('Xin lỗi bạn, quán đang quá tải tin nhắn. Bạn vui lòng nhắn lại giúp quán nhé!');
         }
     });
