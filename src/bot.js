@@ -87,7 +87,7 @@ User: "cho mình trà xoài chanh dây"
 `;
 
 const model = genAI.getGenerativeModel({
-    model: 'gemini-3-flash',
+    model: 'gemini-2.5-flash-lite',
     generationConfig: {
         temperature: 0.2,
         responseMimeType: 'application/json'
