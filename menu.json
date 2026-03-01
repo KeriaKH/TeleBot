@@ -1,0 +1,189 @@
+[
+  {
+    "category": "Trà Sữa",
+    "items": [
+      {
+        "name": "Trà Sữa Trân Châu Đen",
+        "description": "Trà sữa thơm béo với trân châu đen dai ngon",
+        "price_m": 35000,
+        "price_l": 45000
+      },
+      {
+        "name": "Trà Sữa Trân Châu Trắng",
+        "description": "Trà sữa mịn với trân châu trắng thơm",
+        "price_m": 35000,
+        "price_l": 45000
+      },
+      {
+        "name": "Trà Sữa Truyền Thống",
+        "description": "Trà sữa nguyên chất không topping",
+        "price_m": 30000,
+        "price_l": 40000
+      },
+      {
+        "name": "Trà Sữa Khoai Môn",
+        "description": "Trà sữa vị khoai môn hấp dẫn",
+        "price_m": 38000,
+        "price_l": 48000
+      },
+      {
+        "name": "Trà Sữa Bạc Hà",
+        "description": "Trà sữa thơm mát bạc hà tươi",
+        "price_m": 35000,
+        "price_l": 45000
+      }
+    ]
+  },
+  {
+    "category": "Trà Trái Cây",
+    "items": [
+      {
+        "name": "Trà Dâu Tây",
+        "description": "Trà tươi với vị dâu tây ngọt ngào",
+        "price_m": 32000,
+        "price_l": 42000
+      },
+      {
+        "name": "Trà Mâm Xôi",
+        "description": "Trà mâm xôi tươi mát giải khát",
+        "price_m": 32000,
+        "price_l": 42000
+      },
+      {
+        "name": "Trà Chanh Leo",
+        "description": "Trà chanh leo chua nhẹ sảng khoái",
+        "price_m": 30000,
+        "price_l": 40000
+      },
+      {
+        "name": "Trà Vải Thiều",
+        "description": "Trà vải thiều ngọt hương lạ",
+        "price_m": 33000,
+        "price_l": 43000
+      },
+      {
+        "name": "Trà Xoài",
+        "description": "Trà xoài tươi thơm vị nhiệt đới",
+        "price_m": 32000,
+        "price_l": 42000
+      }
+    ]
+  },
+  {
+    "category": "Cà Phê",
+    "items": [
+      {
+        "name": "Cà Phê Đen",
+        "description": "Cà phê đen đậm đà truyền thống",
+        "price_m": 25000,
+        "price_l": 30000
+      },
+      {
+        "name": "Cà Phê Sữa",
+        "description": "Cà phê sữa béo ngậy hạnh phúc",
+        "price_m": 28000,
+        "price_l": 33000
+      },
+      {
+        "name": "Cà Phê Caramel",
+        "description": "Cà phê với ít caramel mượt mà",
+        "price_m": 30000,
+        "price_l": 35000
+      },
+      {
+        "name": "Cà Phê Mocha",
+        "description": "Cà phê với chocolate ngọt dịu",
+        "price_m": 32000,
+        "price_l": 37000
+      },
+      {
+        "name": "Cà Phê Macchiato",
+        "description": "Cà phê espresso với ít sữa",
+        "price_m": 27000,
+        "price_l": 32000
+      }
+    ]
+  },
+  {
+    "category": "Đá Xay",
+    "items": [
+      {
+        "name": "Đá Xay Dâu Tây",
+        "description": "Đá xay mịn vị dâu tây tươi mát",
+        "price_m": 35000,
+        "price_l": 45000
+      },
+      {
+        "name": "Đá Xay Dừa",
+        "description": "Đá xay vị dừa ngọt dễ chịu",
+        "price_m": 35000,
+        "price_l": 45000
+      },
+      {
+        "name": "Đá Xay Matcha",
+        "description": "Đá xay matcha tươi giải khát",
+        "price_m": 38000,
+        "price_l": 48000
+      },
+      {
+        "name": "Đá Xay Sôcôla",
+        "description": "Đá xay sôcôla ngọt thơm",
+        "price_m": 36000,
+        "price_l": 46000
+      }
+    ]
+  },
+  {
+    "category": "Topping",
+    "items": [
+      {
+        "name": "Trân Châu Đen",
+        "description": "Trân châu đen dai ngon",
+        "price_m": 5000,
+        "price_l": 5000
+      },
+      {
+        "name": "Trân Châu Trắng",
+        "description": "Trân châu trắng mềm dẻo",
+        "price_m": 5000,
+        "price_l": 5000
+      },
+      {
+        "name": "Thạch Cà Chua",
+        "description": "Thạch cà chua mọng nước",
+        "price_m": 4000,
+        "price_l": 4000
+      },
+      {
+        "name": "Thạch Xanh",
+        "description": "Thạch xanh mát lạnh tươi",
+        "price_m": 4000,
+        "price_l": 4000
+      },
+      {
+        "name": "Nước Cốt Dừa",
+        "description": "Nước cốt dừa béo ngậy",
+        "price_m": 6000,
+        "price_l": 6000
+      },
+      {
+        "name": "Kem Tươi",
+        "description": "Kem tươi mịn ngọt dịu",
+        "price_m": 8000,
+        "price_l": 8000
+      },
+      {
+        "name": "Gelée Khoai Môn",
+        "description": "Gelée khoai môn vị độc đáo",
+        "price_m": 5000,
+        "price_l": 5000
+      },
+      {
+        "name": "Bột Trà Xanh",
+        "description": "Bột trà xanh thơm ngậy",
+        "price_m": 3000,
+        "price_l": 3000
+      }
+    ]
+  }
+]
