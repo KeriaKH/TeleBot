@@ -1,34 +1,29 @@
 const { Telegraf, Markup } = require('telegraf');
-const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 const { BOT_TOKEN, GEMINI_API_KEY, MOTHER_ID } = require('./config');
 const { initMongo, getDb } = require('./db');
 const {
     loadMenuData,
     buildMenuPriceMap,
-    getFormattedMenu,
-    isMenuIntent
+    getFormattedMenu
 } = require('./services/menuService');
 const {
-    sanitizeAndRecalculateItems,
-    trimChatHistory,
-    buildAssistantStateMessage,
-    isSameOrder
-} = require('./services/orderService');
-const {
-    buildSafeOrderReply,
     buildMotherOrderMessage
 } = require('./services/messageService');
-
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+const { createAiOrderService } = require('./services/aiOrderService');
+const { createTextMessageHandler } = require('./handlers/textMessageHandler');
+const { safeDeleteMessage, safeClearInlineKeyboard, isOwnerUser } = require('./utils/telegramHelpers');
 
 const menuData = loadMenuData();
 const menuPriceMap = buildMenuPriceMap(menuData);
+const { systemPrompt, generateOrderWithGemini } = createAiOrderService({
+    apiKey: GEMINI_API_KEY,
+    menuData
+});
 
 const userCarts = {};
 const chatSessions = {};
 const lastActiveButtons = {};
-const AI_TIMEOUT_MS = 15000;
 
 const ORDER_ACTIONS = Markup.inlineKeyboard([
     Markup.button.callback('✅ Xác Nhận Đặt Hàng', 'CONFIRM_ORDER'),
@@ -39,184 +34,6 @@ function buildOrderDoneActions(orderCode) {
     return Markup.inlineKeyboard([
         Markup.button.callback('✅ Đã làm xong', `ORDER_DONE:${orderCode}`)
     ]);
-}
-
-const SYSTEM_PROMPT = `Bạn là nhân viên nhận order quán trà sữa. Bạn có khả năng ghi nhớ toàn bộ cuộc trò chuyện.
-Đây là menu: ${JSON.stringify(menuData)}
-
-Nhiệm vụ: Trò chuyện, tư vấn cho khách và LIÊN TỤC DUY TRÌ giỏ hàng của họ.
-
-Cấu trúc JSON BẮT BUỘC:
-{
-    "items": [ { "name": "...", "size": "M/L", "quantity": 1, "note": "...", "price": 30000 } ],
-    "total": 30000,
-    "reply_message": "Câu tư vấn hoặc xác nhận của bạn."
-}
-
---- QUY TẮC NGHIỆP VỤ ---
-
-1. ĐỊNH DẠNG & TÍNH TIỀN:
-- 'price' và 'total' phải là SỐ NGUYÊN.
-- Trong 'reply_message' luôn dùng dấu chấm phân cách hàng nghìn và chữ 'đ' (VD: 30.000đ).
-- Luôn hiển thị rõ size, giá tiền từng món và tổng tiền trong 'reply_message' khi xác nhận.
-
-2. QUẢN LÝ GIỎ HÀNG:
-- Nếu khách chỉ hỏi thăm, tư vấn: TUYỆT ĐỐI GIỮ NGUYÊN mảng 'items' cũ, không được làm rỗng.
-- Nếu khách không chọn size thì mặc định là size M.
-- Thuộc tính 'note' CHỈ dùng cho tùy chỉnh phục vụ (ít đá, ít đường). Tuyệt đối không dùng note để thêm topping trong menu mà phải nhận diện nó như một món riêng nếu topping đó có trong menu.
-
-3. XỬ LÝ MÓN LẠ/SAI TÊN (QUAN TRỌNG):
-- CHỈ thêm món vào giỏ khi tên món khớp rõ ràng với menu. KHÔNG tự suy đoán món gần đúng.
-- Nếu khách gọi món lạ (VD: Trà xoài chanh dây), hoặc gọi sai tên (VD: Trà chanh giã tay): TUYỆT ĐỐI KHÔNG dùng 'note' để chế món. Hãy GIỮ NGUYÊN giỏ hàng hiện tại (không xóa, không đổi món cũ).
-- Trong trường hợp này, 'reply_message' phải báo rõ không có món đó. Và không được gợi ý món khác nếu khách không hỏi.
-
---- VÍ DỤ BẮT BUỘC (FEW-SHOT) ---
-
-User: "thêm 1 ly trà chanh giã tay"
-{
-  "items": [...giữ nguyên các món đã gọi trước đó...],
-  "total": ...,
-  "reply_message": "Dạ quán em không có Trà Chanh Giã Tay ạ."
-}
-
-User: "cho mình trà xoài chanh dây"
-{
-  "items": [...giữ nguyên các món đã gọi trước đó...],
-  "total": ...,
-  "reply_message": "Dạ menu quán em chỉ có Trà Xoài thôi, không có mix vị chanh dây ạ."
-}
-`;
-
-const model = genAI.getGenerativeModel({
-    model: 'gemini-2.5-flash',
-    generationConfig: {
-        temperature: 0.2,
-        responseMimeType: 'application/json'
-    },
-    systemInstruction: SYSTEM_PROMPT
-});
-
-function extractJsonString(rawText) {
-    const text = String(rawText || '').trim();
-    if (!text) {
-        throw new Error('Gemini trả về nội dung rỗng');
-    }
-
-    if (text.startsWith('{') && text.endsWith('}')) {
-        return text;
-    }
-
-    const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-    if (fenced?.[1]) {
-        return fenced[1].trim();
-    }
-
-    const firstBrace = text.indexOf('{');
-    const lastBrace = text.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        return text.slice(firstBrace, lastBrace + 1).trim();
-    }
-
-    return text;
-}
-
-function normalizeLikelyJson(jsonText) {
-    let normalized = String(jsonText || '').trim();
-    if (!normalized) return normalized;
-
-    normalized = normalized
-        .replace(/^\uFEFF/, '')
-        .replace(/[\u201C\u201D]/g, '"')
-        .replace(/[\u2018\u2019]/g, "'")
-        .replace(/,\s*([}\]])/g, '$1')
-        .replace(/([{,]\s*)([A-Za-z_][A-Za-z0-9_]*)(\s*:)/g, '$1"$2"$3');
-
-    if (normalized.includes("'")) {
-        normalized = normalized.replace(/'([^'\\]*(?:\\.[^'\\]*)*)'/g, (_, inner) => {
-            const escaped = inner.replace(/\"/g, '"').replace(/"/g, '\\"');
-            return `"${escaped}"`;
-        });
-    }
-
-    return normalized;
-}
-
-function parseOrderData(rawText) {
-    const extracted = extractJsonString(rawText);
-
-    try {
-        return JSON.parse(extracted);
-    } catch (firstError) {
-        const normalized = normalizeLikelyJson(extracted);
-        try {
-            return JSON.parse(normalized);
-        } catch (secondError) {
-            const parseError = new Error(`JSON_PARSE_ERROR: ${secondError.message}`);
-            parseError.name = 'JsonParseError';
-            throw parseError;
-        }
-    }
-}
-
-async function withTimeout(promise, timeoutMs, timeoutMessage = 'TIMEOUT') {
-    let timer;
-    try {
-        const timeoutPromise = new Promise((_, reject) => {
-            timer = setTimeout(() => {
-                const err = new Error(timeoutMessage);
-                err.name = 'TimeoutError';
-                reject(err);
-            }, timeoutMs);
-        });
-
-        return await Promise.race([promise, timeoutPromise]);
-    } finally {
-        clearTimeout(timer);
-    }
-}
-
-async function replyCurrentCartOrFallback(ctx, userId, fallbackMessage) {
-    const currentCart = userCarts[userId];
-    if (!currentCart || !Array.isArray(currentCart.items) || currentCart.items.length === 0) {
-        await ctx.reply(fallbackMessage);
-        return;
-    }
-
-    await ctx.reply('Mình đang gặp chút trục trặc khi xử lý câu vừa rồi, mình giữ nguyên đơn hiện tại của bạn nhé 👇');
-    await safeClearInlineKeyboard(ctx, lastActiveButtons[userId]);
-    const receipt = buildSafeOrderReply(currentCart.items, currentCart.total);
-    const sentMsg = await ctx.reply(receipt, ORDER_ACTIONS);
-    lastActiveButtons[userId] = sentMsg.message_id;
-}
-
-async function generateOrderWithGemini(history) {
-    const contents = history
-        .filter((msg) => msg.role !== 'system')
-        .map((msg) => ({
-            role: msg.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
-        }));
-
-    const result = await model.generateContent({ contents });
-    return result.response.text();
-}
-
-async function safeDeleteMessage(ctx, messageId) {
-    if (!messageId) return;
-    try {
-        await ctx.deleteMessage(messageId);
-    } catch (e) {}
-}
-
-async function safeClearInlineKeyboard(ctx, messageId) {
-    if (!messageId) return;
-    try {
-        await ctx.telegram.editMessageReplyMarkup(ctx.chat.id, messageId, undefined, { inline_keyboard: [] });
-    } catch (e) {}
-}
-
-function isOwnerUser(userId) {
-    return String(userId) === String(MOTHER_ID);
 }
 
 function createBot() {
@@ -241,105 +58,21 @@ function createBot() {
         ctx.reply(getFormattedMenu(menuData), { parse_mode: 'Markdown' });
     });
 
-    bot.on('text', async (ctx) => {
-        const userId = ctx.from.id;
-        const userMessage = ctx.message.text;
-
-        if (isOwnerUser(userId)) {
-            return;
-        }
-
-        if (userMessage.startsWith('/')) return;
-
-        if (isMenuIntent(userMessage)) {
-            await ctx.reply(getFormattedMenu(menuData), { parse_mode: 'Markdown' });
-            return;
-        }
-
-        const thinkingMsg = await ctx.reply('⏳ Đợi mình xíu nhé...');
-
-        try {
-            if (!chatSessions[userId]) {
-                chatSessions[userId] = [{ role: 'system', content: SYSTEM_PROMPT }];
-            }
-
-            chatSessions[userId].push({ role: 'user', content: userMessage });
-            trimChatHistory(chatSessions[userId]);
-
-            const responseText = await withTimeout(
-                generateOrderWithGemini(chatSessions[userId]),
-                AI_TIMEOUT_MS,
-                'AI request timeout'
-            );
-            const orderData = parseOrderData(responseText);
-
-            await safeDeleteMessage(ctx, thinkingMsg.message_id);
-
-            if (orderData.items && orderData.items.length > 0) {
-                const recalculatedOrder = sanitizeAndRecalculateItems(orderData.items, menuPriceMap);
-
-                const safeReplyMessage = buildSafeOrderReply(recalculatedOrder.items, recalculatedOrder.total);
-                const previousCart = userCarts[userId];
-                const orderChanged = !isSameOrder(previousCart, recalculatedOrder);
-                const needReceiptRender = orderChanged || !lastActiveButtons[userId];
-
-                userCarts[userId] = {
-                    customerName: ctx.from.first_name || 'Khách',
-                    username: ctx.from.username || 'Không có',
-                    items: recalculatedOrder.items,
-                    total: recalculatedOrder.total
-                };
-
-                chatSessions[userId].push({
-                    role: 'assistant',
-                    content: buildAssistantStateMessage(recalculatedOrder.items, recalculatedOrder.total)
-                });
-                trimChatHistory(chatSessions[userId]);
-
-                if (needReceiptRender) {
-                    await safeClearInlineKeyboard(ctx, lastActiveButtons[userId]);
-
-                    const sentMsg = await ctx.reply(safeReplyMessage, ORDER_ACTIONS);
-                    lastActiveButtons[userId] = sentMsg.message_id;
-                    return;
-                }
-
-                const consultReply = String(orderData.reply_message || '').trim();
-                await ctx.reply(consultReply || 'Mình vẫn giữ nguyên đơn hiện tại nha. Bạn muốn mình tư vấn thêm món nào không?');
-            } else {
-                chatSessions[userId].push({
-                    role: 'assistant',
-                    content: String(orderData.reply_message || '')
-                });
-                trimChatHistory(chatSessions[userId]);
-                await ctx.reply(String(orderData.reply_message || 'Bạn muốn mình gợi ý vài món dễ uống không?'));
-            }
-        } catch (error) {
-            console.error('Lỗi AI hoặc Logic:', error);
-
-            await safeDeleteMessage(ctx, thinkingMsg.message_id);
-
-            if (error?.name === 'TimeoutError') {
-                await replyCurrentCartOrFallback(
-                    ctx,
-                    userId,
-                    'Quán đang hơi đông nên phản hồi chậm một chút 😥 Bạn nhắn lại giúp mình hoặc gõ “xem đơn hàng” để kiểm tra đơn hiện tại nhé.'
-                );
-                return;
-            }
-
-            if (error?.name === 'JsonParseError' || String(error?.message || '').includes('JSON_PARSE_ERROR')) {
-                await replyCurrentCartOrFallback(
-                    ctx,
-                    userId,
-                    'Mình chưa đọc kịp nội dung đơn vừa rồi. Bạn nhắn lại ngắn gọn hơn giúp mình hoặc gõ “xem đơn hàng” nhé.'
-                );
-                return;
-            }
-
-            await ctx.reply('Xin lỗi bạn, quán đang quá tải tin nhắn. Bạn vui lòng nhắn lại giúp quán nhé!');
-        }
+    const handleTextMessage = createTextMessageHandler({
+        menuData,
+        menuPriceMap,
+        userCarts,
+        chatSessions,
+        lastActiveButtons,
+        orderActions: ORDER_ACTIONS,
+        isOwnerUser,
+        safeDeleteMessage,
+        safeClearInlineKeyboard,
+        generateOrderWithGemini,
+        systemPrompt
     });
+
+    bot.on('text', handleTextMessage);
 
     bot.action('CONFIRM_ORDER', async (ctx) => {
         const userId = ctx.from.id;
